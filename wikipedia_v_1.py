@@ -32,7 +32,6 @@ class ThreadURL(threading.Thread):
         threading.Thread.__init__(self)
         self.key_queue = key_queue
         self.url_queue = url_queue
-        self.lock = threading.Lock()
 
     def run(self):
         while True:
@@ -72,8 +71,8 @@ class ThreadURL(threading.Thread):
                     cur.execute('SELECT * FROM wikipedia')
                     for item in cur:
                         if item[2] is None:
-                            key_queue.put(item[1])
-                            url_queue.put(item[1])
+                            self.key_queue.put(item[1])
+                            self.url_queue.put(item[1])
                     lock.release()
             except:
                 print('URL', key)
@@ -81,20 +80,19 @@ class ThreadURL(threading.Thread):
 
 
 class ThreadCrawl(threading.Thread):
-    def __init__(self, key_queue):
+    def __init__(self, key_queue, host):
         threading.Thread.__init__(self)
         self.key_queue = key_queue
-        self.lock = threading.Lock()
+        self.host = host
 
     def run(self):
         while True:
             try:
-                global host
-                if Queue.empty():
-                    time.sleep(10)
+                if self.key_queue.empty():
+                    time.sleep(1)
                     continue
                 key = self.key_queue.get()
-                link = host + key
+                link = self.host + key
                 link_requests = s.get(link)
                 link_requests.encoding = 'UTF-8'
                 soup_link = BeautifulSoup(link_requests.text, 'html.parser')
@@ -117,16 +115,16 @@ class ThreadCrawl(threading.Thread):
                     lock.release()
             except:
                 print(key)
+                self.key_queue.put(key)
                 continue
 
 
 def main():
-    for i in range(4):
+    for i in range(1):
         threads_url.append(ThreadURL(key_queue, url_queue))
         threads_url[i].start()
-    time.sleep(10)
-    for i in range(200):
-        threads_crawl.append(ThreadCrawl(key_queue))
+    for i in range(50):
+        threads_crawl.append(ThreadCrawl(key_queue, host))
         threads_crawl[i].start()
 
 
