@@ -2,6 +2,7 @@ from multiprocessing import Queue
 import threading
 import requests
 from bs4 import BeautifulSoup
+from bs4 import SoupStrainer
 import pymysql
 import time
 import getpass
@@ -51,36 +52,36 @@ class ThreadURL(threading.Thread):
                 link = host + key
                 link_requests = s.get(link)
                 link_requests.encoding = 'UTF-8'
-                soup_link = BeautifulSoup(link_requests.text, 'lxml')
-                for item in (soup_link.find_all('div', id='mw-content-text')):
-                    for a in item.find_all('a'):
-                        temp_key = a.get('href')
-                        try:
-                            temp_key = temp_key.split('/wiki/')[1]
-                            flag = 0
-                            for block in block_list:
-                                if temp_key.find(block) != -1:
-                                    flag = 1
-                                    break
-                            if flag == 1:
-                                continue
-                        except:
+                div_only = SoupStrainer('div', id='mw-content-text')
+                soup_link = BeautifulSoup(link_requests.text, 'lxml', parse_only=div_only)
+                for item in soup_link.find_all('a'):
+                    temp_key = item.get('href')
+                    try:
+                        temp_key = temp_key.split('/wiki/')[1]
+                        flag = 0
+                        for block in block_list:
+                            if temp_key.find(block) != -1:
+                                flag = 1
+                                break
+                        if flag == 1:
                             continue
-                        if temp_key != '' and len(temp_key) < 255:
-                            temp_key = temp_key.replace('\"', ' ')
-                            if lock.acquire():
-                                cur.execute('SELECT COUNT(*) FROM English WHERE English = "' + temp_key + '"')
-                                lock.release()
-                            for item in cur:
-                                if item[0] == 0:
-                                    if lock.acquire():
-                                        cur.execute('INSERT INTO English (English) VALUES ("' + temp_key + '")')
-                                        conn.commit()
-                                        self.key_queue.put(temp_key)
-                                        self.url_queue.put(temp_key)
-                                        lock.release()
-                                else:
-                                    break
+                    except:
+                        continue
+                    if temp_key != '' and len(temp_key) < 255:
+                        temp_key = temp_key.replace('\"', ' ')
+                        if lock.acquire():
+                            cur.execute('SELECT COUNT(*) FROM English WHERE English = "' + temp_key + '"')
+                            lock.release()
+                        for item in cur:
+                            if item[0] == 0:
+                                if lock.acquire():
+                                    cur.execute('INSERT INTO English (English) VALUES ("' + temp_key + '")')
+                                    conn.commit()
+                                    self.key_queue.put(temp_key)
+                                    self.url_queue.put(temp_key)
+                                    lock.release()
+                            else:
+                                break
             except:
                 print('URL', key)
                 continue
@@ -102,13 +103,14 @@ class ThreadCrawl(threading.Thread):
                 link = host + key
                 link_requests = s.get(link)
                 link_requests.encoding = 'UTF-8'
-                soup_link = BeautifulSoup(link_requests.text, 'lxml')
+                a_only = SoupStrainer('a', class_='interlanguage-link-target')
+                soup_link = BeautifulSoup(link_requests.text, 'lxml', parse_only=a_only)
                 if lock.acquire():
                     cur.execute('SELECT id FROM English WHERE English = "' + key + '"')
                     for item in cur:
                         id_e = str(item[0])
                     lock.release()
-                for item in (soup_link.find_all('a', class_='interlanguage-link-target')):
+                for item in soup_link.find_all('a'):
                     item = item.get('title')
                     devided = item.rfind(' – ')
                     if devided == -1:
@@ -126,7 +128,7 @@ class ThreadCrawl(threading.Thread):
                     lock.release()
                 print (id_e, key)
             except:
-                print ('INSERT INTO `' + method + '` VALUES ("' + expression + '" ,"' + id_e + '")')
+                print (method, expression, id_e)
                 self.key_queue.put(key)
                 continue
 
