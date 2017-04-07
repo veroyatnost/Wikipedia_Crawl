@@ -106,9 +106,9 @@ class ThreadCrawl(threading.Thread):
                 a_only = SoupStrainer('a', class_='interlanguage-link-target')
                 soup_link = BeautifulSoup(link_requests.text, 'lxml', parse_only=a_only)
                 if lock.acquire():
-                    cur.execute('SELECT id FROM English WHERE English = "' + key + '"')
+                    cur.execute('SELECT English_id FROM English WHERE English = "' + key + '"')
                     for item in cur:
-                        id_e = str(item[0])
+                        English_id = str(item[0])
                     lock.release()
                 for item in soup_link.find_all('a'):
                     item = item.get('title')
@@ -119,16 +119,16 @@ class ThreadCrawl(threading.Thread):
                     method = item[devided + 3:]
                     if method != 'English' and len(expression) < 255:
                         if lock.acquire():
-                            cur.execute('INSERT INTO `' + method + '` VALUES ("' + expression + '" ,"' + id_e + '")')
+                            cur.execute('INSERT INTO `' + method + '` (`' + method + '`, English_id) VALUES ("' + expression + '" ,"' + English_id + '")')
                             conn.commit()
                             lock.release()
                 if lock.acquire():
-                    cur.execute('UPDATE English SET Flag = 1 WHERE id = ' + id_e)
+                    cur.execute('UPDATE English SET Flag = 1 WHERE English_id = ' + English_id)
                     conn.commit()
                     lock.release()
-                print (id_e, key)
+                print (English_id, key)
             except:
-                print (method, expression, id_e)
+                print (method, expression, English_id)
                 self.key_queue.put(key)
                 continue
 
